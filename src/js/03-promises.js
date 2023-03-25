@@ -3,7 +3,7 @@ const formElement = document.querySelector('.form');
 formElement.addEventListener('submit', event => {
   event.preventDefault();
   const { delay, step, amount } = getFormValues(formElement);
-  handlePromises(delay, step, amount);
+  handleSubmit(delay, step, amount);
 });
 function getFormValues(form) {
   const delayInput = form.querySelector('input[name="delay"]');
@@ -15,15 +15,35 @@ function getFormValues(form) {
     amount: parseInt(amountInput.value),
   };
 }
-async function handlePromises(delay, step, amount) {
-  for (let i = 1; i <= amount; i += 1) {
-    try {
-      const result = await createPromise(i, delay + (i - 1) * step);
-      handlePromiseSuccess(result);
-    } catch (error) {
-      handlePromiseError(error);
+function handleSubmit(delay, step, amount) {
+  let lastPromiseCreated = false;
+  const firstPromiseDelay = delay;
+  createPromise(1, firstPromiseDelay)
+    .then(result => handlePromiseSuccess(result))
+    .catch(error => handlePromiseError(error));
+  let i = 2;
+  const intervalId = setInterval(() => {
+    if (i <= amount) {
+      createPromise(i, delay + (i - 1) * step)
+        .then(result => handlePromiseSuccess(result))
+        .catch(error => handlePromiseError(error));
+      i += 1;
+      if (i > amount) {
+        lastPromiseCreated = true;
+      }
+    } else {
+      clearInterval(intervalId);
     }
-  }
+  }, step);
+  const lastPromiseDelay = delay + (amount - 1) * step;
+  setTimeout(() => {
+    if (!lastPromiseCreated) {
+      createPromise(amount, delay + (amount - 1) * step)
+        .then(result => handlePromiseSuccess(result))
+        .catch(error => handlePromiseError(error));
+      lastPromiseCreated = true;
+    }
+  }, lastPromiseDelay);
 }
 function handlePromiseSuccess({ position, delay }) {
   Notiflix.Notify.success(`✅ Fulfilled promise ${position} in ${delay}ms`);
@@ -31,15 +51,24 @@ function handlePromiseSuccess({ position, delay }) {
 function handlePromiseError({ position, delay }) {
   Notiflix.Notify.failure(`❌ Rejected promise ${position} in ${delay}ms`);
 }
-function createPromise(position, delay) {
+function createPromise(position, delay, step) {
+  // console.log(`Creating promise ${position} with delay ${delay}ms`);
   return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const shouldResolve = Math.random() > 0.3;
-      if (shouldResolve) {
-        resolve({ position, delay });
+    const startTime = performance.now();
+    function checkTime() {
+      const currentTime = performance.now();
+      const elapsed = currentTime - startTime;
+      if (elapsed >= delay) {
+        const shouldResolve = Math.random() > 0.3;
+        if (shouldResolve) {
+          resolve({ position, delay });
+        } else {
+          reject({ position, delay });
+        }
       } else {
-        reject({ position, delay });
+        requestAnimationFrame(checkTime);
       }
-    }, delay);
+    }
+    checkTime();
   });
 }
